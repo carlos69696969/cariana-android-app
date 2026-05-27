@@ -52,6 +52,8 @@ import java.util.Map;
 public class JavaScriptInterface {
     private static final String PREFS_PUSH_STORE = "cariana_push_notifications";
     private static final String PREFS_KEY_URL_PREFIX = "push_url_";
+    private static final String PREFS_PUSH_SYNC = "cariana_push_sync";
+    private static final String PREFS_KEY_PUSH_USER_ID = "user_id";
     private Context context;
     public JavaScriptInterface(Context context) {
         this.context = context;
@@ -150,6 +152,12 @@ public class JavaScriptInterface {
     @JavascriptInterface
     public void clearPushUser() {
         PushSyncManager.clearUser(context);
+    }
+    @JavascriptInterface
+    public String getPushCustomerId() {
+        SharedPreferences preferences = context.getSharedPreferences(PREFS_PUSH_SYNC, Context.MODE_PRIVATE);
+        String value = preferences.getString(PREFS_KEY_PUSH_USER_ID, "");
+        return value == null ? "" : value.trim();
     }
     @JavascriptInterface
     public void dismissNotificationByUrl(String targetUrl) {
