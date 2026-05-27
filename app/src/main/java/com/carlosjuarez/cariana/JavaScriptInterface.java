@@ -34,6 +34,8 @@ import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Environment;
 import android.content.Context;
+import android.os.Build;
+import android.service.notification.StatusBarNotification;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.FileProvider;
 import android.os.Handler;
@@ -165,6 +167,40 @@ public class JavaScriptInterface {
         SharedPreferences preferences = context.getSharedPreferences(PREFS_PUSH_SYNC, Context.MODE_PRIVATE);
         String value = preferences.getString(PREFS_KEY_PUSH_TOKEN, "");
         return value == null ? "" : value.trim();
+    }
+    @JavascriptInterface
+    public int getTrayNotificationCount() {
+        NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (notificationManager == null) {
+            return -1;
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return -1;
+        }
+
+        StatusBarNotification[] active = notificationManager.getActiveNotifications();
+        if (active == null || active.length == 0) {
+            return 0;
+        }
+
+        int count = 0;
+        for (StatusBarNotification item : active) {
+            if (item == null || item.getNotification() == null) {
+                continue;
+            }
+            String channelId = "";
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                channelId = item.getNotification().getChannelId();
+            }
+            String pkg = item.getPackageName();
+            if (!TextUtils.equals(pkg, context.getPackageName())) {
+                continue;
+            }
+            if (TextUtils.isEmpty(channelId) || channelId.startsWith("cariana_")) {
+                count += 1;
+            }
+        }
+        return count;
     }
     @JavascriptInterface
     public void dismissNotificationByUrl(String targetUrl) {
