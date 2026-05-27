@@ -54,6 +54,7 @@ public class JavaScriptInterface {
     private static final String PREFS_KEY_URL_PREFIX = "push_url_";
     private static final String PREFS_PUSH_SYNC = "cariana_push_sync";
     private static final String PREFS_KEY_PUSH_USER_ID = "user_id";
+    private static final String PREFS_KEY_PUSH_TOKEN = "token";
     private Context context;
     public JavaScriptInterface(Context context) {
         this.context = context;
@@ -157,6 +158,12 @@ public class JavaScriptInterface {
     public String getPushCustomerId() {
         SharedPreferences preferences = context.getSharedPreferences(PREFS_PUSH_SYNC, Context.MODE_PRIVATE);
         String value = preferences.getString(PREFS_KEY_PUSH_USER_ID, "");
+        return value == null ? "" : value.trim();
+    }
+    @JavascriptInterface
+    public String getPushToken() {
+        SharedPreferences preferences = context.getSharedPreferences(PREFS_PUSH_SYNC, Context.MODE_PRIVATE);
+        String value = preferences.getString(PREFS_KEY_PUSH_TOKEN, "");
         return value == null ? "" : value.trim();
     }
     @JavascriptInterface
