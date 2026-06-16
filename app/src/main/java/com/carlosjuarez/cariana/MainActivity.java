@@ -957,7 +957,7 @@ public class MainActivity extends AppCompatActivity {
         WebSettings webSettings = wv.getSettings();
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
-        webSettings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
         webSettings.setSupportMultipleWindows(false);
         webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
         webSettings.setAllowFileAccess(true);
@@ -974,6 +974,10 @@ public class MainActivity extends AppCompatActivity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
             CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true);
+        }
+        String systemUserAgent = System.getProperty("http.agent");
+        if (!TextUtils.isEmpty(systemUserAgent)) {
+            webSettings.setUserAgentString(systemUserAgent);
         }
         CookieManager.getInstance().setAcceptCookie(true);
         wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
