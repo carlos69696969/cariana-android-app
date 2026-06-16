@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "87299817802",
+    "project_id": "cariana-push-notificaciones",
+    "storage_bucket": "cariana-push-notificaciones.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:87299817802:android:41d03bde127639476341b3",
+        "android_client_info": {
+          "package_name": "com.carlosjuarez.cariana"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDWXPElGKGCoehna8UbajEmXTMXemIa0rc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

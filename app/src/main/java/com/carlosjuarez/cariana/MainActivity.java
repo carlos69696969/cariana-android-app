@@ -54,9 +54,11 @@ import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.RenderProcessGoneDetail;
 import android.text.TextUtils;
 import android.text.InputType;
 import android.widget.EditText;
@@ -104,6 +106,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import android.util.Log;
 import android.widget.FrameLayout;
 import android.graphics.BitmapFactory;
+import com.google.firebase.FirebaseApp;
 import com.google.firebase.messaging.FirebaseMessaging;
 public class MainActivity extends AppCompatActivity {
     private WebView mWebView;
@@ -111,7 +114,8 @@ public class MainActivity extends AppCompatActivity {
     private ValueCallback<Uri[]> mFilePathCallback;
     private String mCameraPhotoPath;
     private static final String TAG = "MainActivity";
-    private static final String DEFAULT_HOME_URL = "https://cariana.com.mx/";
+    private static final String DEFAULT_HOME_URL = "https://cariana.mx/";
+    private static final String BACKUP_HOME_URL = "https://cariana-3.myshopify.com/";
     public static final String EXTRA_TARGET_URL = "extra_target_url";
     SharedPreferences prefs = null;
     int width = 0, height = 0;
@@ -125,10 +129,12 @@ public class MainActivity extends AppCompatActivity {
     static final int PERMISSION_LOC = 100;
     static final int PERMISSION_VIDEO_CAPTURE1 = 1001;
     static final int PERMISSION_VIDEO_CAPTURE2 = 1002;
+    static final int PERMISSION_POST_NOTIFICATIONS = 1003;
     static final int PERMISSION_AUDIO = 106;
     PermissionRequest permissionRequest;
     static boolean homeLoaded = false;
     static String currentUrl = "";
+    private boolean renderRecoveryScheduled = false;
     @RequiresApi(api = Build.VERSION_CODES.M)
     @SuppressLint({"SetJavaScriptEnabled", "CutPasteId"})
     @Override
@@ -324,6 +330,18 @@ public class MainActivity extends AppCompatActivity {
             }
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                return handleWebViewUrlLoading(view, url);
+            }
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                Uri requestUri = request != null ? request.getUrl() : null;
+                String requestUrl = requestUri != null ? requestUri.toString() : "";
+                return handleWebViewUrlLoading(view, requestUrl);
+            }
+            private boolean handleWebViewUrlLoading(WebView view, String url) {
+                if (TextUtils.isEmpty(url)) {
+                    return false;
+                }
                 if (url.startsWith("native-share://")) {
                     handleNativeShareUrl(url);
                     return true;
@@ -425,9 +443,23 @@ public class MainActivity extends AppCompatActivity {
                 findViewById(R.id.activity_splash_webview).setVisibility(View.GONE);
                 findViewById(R.id.activity_main_webview).setVisibility(View.VISIBLE);
                 display_error = true;
+                enableNativeShareBridge(view);
+                enablePushIdentityBridge(view);
+                scheduleRenderRecovery(view);
                 if(!homeLoaded){
                     homeLoaded = true;
                 }
+            }
+            @Override
+            public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                Log.w(TAG, "WebView renderer process gone. Recovering.");
+                if (view != null) {
+                    view.destroy();
+                }
+                if (!isFinishing()) {
+                    recreate();
+                }
+                return true;
             }
             @Override
             public void onReceivedError(@NonNull WebView view, @NonNull WebResourceRequest request, @NonNull WebResourceError error) {
@@ -449,6 +481,22 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
             @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
+                super.onReceivedHttpError(view, request, errorResponse);
+                if (request == null || errorResponse == null || !request.isForMainFrame()) {
+                    return;
+                }
+                int statusCode = errorResponse.getStatusCode();
+                if (statusCode >= 500 && statusCode <= 599) {
+                    Uri failingUri = request.getUrl();
+                    String failingUrl = failingUri != null ? failingUri.toString() : "";
+                    if (!failingUrl.startsWith(BACKUP_HOME_URL)) {
+                        Log.w(TAG, "Servidor principal con error " + statusCode + ". Cargando respaldo.");
+                        view.loadUrl(BACKUP_HOME_URL);
+                    }
+                }
+            }
+            @Override
             public void onLoadResource(WebView  view, String  url){
                 if (!checkInternetConnection(MainActivity.this)) {
                     if(!no_internet) {
@@ -463,6 +511,7 @@ public class MainActivity extends AppCompatActivity {
             no_internet = true;
             return;
         }
+        requestNotificationPermissionIfNeeded();
         initializeFirebaseMessaging();
         loadInitialUrl(getIntent());
         swipeRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
@@ -472,26 +521,46 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
+    private void requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+            && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(
+                this,
+                new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                PERMISSION_POST_NOTIFICATIONS
+            );
+        }
+    }
     private void initializeFirebaseMessaging() {
-        FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
-            if (!task.isSuccessful()) {
-                Log.w(TAG, "No se pudo obtener el token FCM", task.getException());
+        try {
+            FirebaseApp firebaseApp = FirebaseApp.initializeApp(this);
+            if (firebaseApp == null) {
+                Log.w(TAG, "Firebase no configurado: falta google-services.json. Se omite FCM.");
                 return;
             }
-            String token = task.getResult();
-            Log.d(TAG, "FCM token: " + token);
-        });
+            FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
+                if (!task.isSuccessful()) {
+                    Log.w(TAG, "No se pudo obtener el token FCM", task.getException());
+                    return;
+                }
+                String token = task.getResult();
+                Log.d(TAG, "FCM token: " + token);
+                PushSyncManager.syncToken(MainActivity.this, token);
+            });
+        } catch (Exception e) {
+            Log.w(TAG, "Firebase no disponible en este build, se continua sin FCM.", e);
+        }
     }
     private void loadInitialUrl(Intent intent) {
         String targetUrl = null;
         if (intent != null) {
-            String notificationUrl = intent.getStringExtra(EXTRA_TARGET_URL);
-            if (isTrustedDeepLink(notificationUrl)) {
-                targetUrl = notificationUrl;
-            }
-            Uri data = intent.getData();
-            if (data != null && isTrustedDeepLink(data.toString())) {
-                targetUrl = data.toString();
+            targetUrl = resolveIntentDeepLink(intent);
+            if (TextUtils.isEmpty(targetUrl)) {
+                String action = intent.getAction();
+                if ("OPEN_ORDER_STATUS".equals(action)) {
+                    targetUrl = "https://cariana.mx/account/orders";
+                }
             }
         }
         if (TextUtils.isEmpty(targetUrl)) {
@@ -499,22 +568,57 @@ public class MainActivity extends AppCompatActivity {
         }
         mWebView.loadUrl(targetUrl);
     }
+
+    private String resolveIntentDeepLink(Intent intent) {
+        if (intent == null) {
+            return null;
+        }
+
+        String[] candidateKeys = new String[] {
+            EXTRA_TARGET_URL,
+            "deepLink",
+            "deeplink",
+            "url",
+            "link",
+            "targetUrl"
+        };
+
+        for (String key : candidateKeys) {
+            String value = intent.getStringExtra(key);
+            if (isTrustedDeepLink(value)) {
+                return value;
+            }
+        }
+
+        Uri data = intent.getData();
+        if (data != null && isTrustedDeepLink(data.toString())) {
+            return data.toString();
+        }
+
+        return null;
+    }
     private boolean isTrustedDeepLink(String url) {
         if (TextUtils.isEmpty(url)) {
             return false;
         }
+
         Uri parsed = Uri.parse(url);
         String scheme = parsed.getScheme();
         String host = parsed.getHost();
         if (scheme == null || host == null) {
             return false;
         }
+
         if (!"https".equalsIgnoreCase(scheme)) {
             return false;
         }
-        return "cariana.com.mx".equalsIgnoreCase(host)
-            || "www.cariana.com.mx".equalsIgnoreCase(host)
-            || "cariana-3.myshopify.com".equalsIgnoreCase(host);
+
+        String normalizedHost = host.toLowerCase();
+        return "cariana.mx".equals(normalizedHost)
+            || "www.cariana.mx".equals(normalizedHost)
+            || normalizedHost.endsWith(".myshopify.com")
+            || "gestion-devoluciones-pro.onrender.com".equals(normalizedHost)
+            || "centro-de-notificaciones-cariana.onrender.com".equals(normalizedHost);
     }
     private void handleNativeShareUrl(String url) {
         Uri parsed = Uri.parse(url);
@@ -538,6 +642,108 @@ public class MainActivity extends AppCompatActivity {
         shareIntent.putExtra(Intent.EXTRA_TEXT, payload.toString());
         startActivity(Intent.createChooser(shareIntent, "Compartir con"));
     }
+    private void enableNativeShareBridge(WebView webView) {
+        if (webView == null) {
+            return;
+        }
+        String shareHookScript =
+            "(function(){"
+                + "if(window.__carianaShareHooked){return;}window.__carianaShareHooked=true;"
+                + "var nativeShare=function(txt,url){"
+                + "try{"
+                + "if(window.Android&&Android.shareUrl){Android.shareUrl(url||window.location.href,txt||document.title);return true;}"
+                + "}catch(e){}"
+                + "return false;"
+                + "};"
+                + "if(navigator&&typeof navigator.share==='function'){"
+                + "var originalShare=navigator.share.bind(navigator);"
+                + "navigator.share=function(data){"
+                + "var t=(data&&data.text)||document.title;"
+                + "var u=(data&&data.url)||window.location.href;"
+                + "if(nativeShare(t,u)){return Promise.resolve();}"
+                + "return originalShare(data);"
+                + "};"
+                + "}"
+                + "document.addEventListener('click',function(ev){"
+                + "var el=ev.target&&ev.target.closest?ev.target.closest('button,a,[role=\"button\"]'):null;"
+                + "if(!el){return;}"
+                + "var text=((el.innerText||el.textContent||'')+' '+(el.getAttribute('aria-label')||'')+' '+(el.getAttribute('title')||'')).toLowerCase();"
+                + "if(text.indexOf('compartir')===-1&&text.indexOf('share')===-1){return;}"
+                + "ev.preventDefault();ev.stopPropagation();"
+                + "nativeShare(document.title,window.location.href);"
+                + "},true);"
+            + "})();";
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            webView.evaluateJavascript(shareHookScript, null);
+        } else {
+            webView.loadUrl("javascript:" + shareHookScript);
+        }
+    }
+    private void enablePushIdentityBridge(WebView webView) {
+        if (webView == null) {
+            return;
+        }
+        String pushIdentityScript =
+            "(function(){"
+                + "if(window.__carianaPushIdentityHooked){return;}window.__carianaPushIdentityHooked=true;"
+                + "var syncIdentity=function(){"
+                + "try{"
+                + "if(!window.Android){return;}"
+                + "var shop='';"
+                + "if(window.Shopify&&Shopify.shop){shop=String(Shopify.shop);}"
+                + "var customerId='';"
+                + "var email='';"
+                + "if(window.ShopifyAnalytics&&ShopifyAnalytics.meta){"
+                + "var meta=ShopifyAnalytics.meta;"
+                + "if(meta.page&&meta.page.customerId){customerId=String(meta.page.customerId);}"
+                + "if(meta.page&&meta.page.customerEmail){email=String(meta.page.customerEmail);}"
+                + "}"
+                + "if(!customerId&&window.__st&&__st.cid){customerId=String(__st.cid);}"
+                + "if(!email){"
+                + "var emailInput=document.querySelector('input[name=\\\"customer[email]\\\"][value], input[type=\\\"email\\\"][value]');"
+                + "if(emailInput&&emailInput.value){email=String(emailInput.value);}"
+                + "}"
+                + "if(shop&&Android.setPushShopDomain){Android.setPushShopDomain(shop);}"
+                + "if((customerId||email)&&Android.setPushUserWithShop){Android.setPushUserWithShop(customerId,email,shop);}"
+                + "else if((customerId||email)&&Android.setPushUser){Android.setPushUser(customerId,email);}"
+                + "}catch(e){}"
+                + "};"
+                + "setTimeout(syncIdentity, 300);"
+                + "setTimeout(syncIdentity, 1200);"
+                + "setTimeout(syncIdentity, 3000);"
+                + "window.addEventListener('focus', syncIdentity);"
+                + "document.addEventListener('visibilitychange', function(){if(!document.hidden){syncIdentity();}});"
+            + "})();";
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            webView.evaluateJavascript(pushIdentityScript, null);
+        } else {
+            webView.loadUrl("javascript:" + pushIdentityScript);
+        }
+    }
+    private void scheduleRenderRecovery(WebView webView) {
+        if (webView == null || renderRecoveryScheduled) {
+            return;
+        }
+        renderRecoveryScheduled = true;
+        webView.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                renderRecoveryScheduled = false;
+                if (mWebView == null) {
+                    return;
+                }
+                mWebView.invalidate();
+                mWebView.requestLayout();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                    mWebView.evaluateJavascript(
+                        "(function(){try{document.body&&document.body.offsetHeight;window.dispatchEvent(new Event('resize'));}catch(e){}})();",
+                        null
+                    );
+                }
+            }
+        }, 700);
+    }
     private void getVideoCapturePermission() {
         permissionRequest.grant(permissionRequest.getResources());
     }
@@ -550,6 +756,9 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == PERMISSION_POST_NOTIFICATIONS) {
+            return;
+        }
         if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             if (requestCode == PERMISSION_LOC) {
                 if (mGeoLocationCallback != null)
@@ -612,6 +821,7 @@ public class MainActivity extends AppCompatActivity {
         WebSettings webSettings = wv.getSettings();
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
+        webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
         webSettings.setSupportMultipleWindows(false);
         webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
         webSettings.setAllowFileAccess(true);
@@ -623,7 +833,15 @@ public class MainActivity extends AppCompatActivity {
         webSettings.setAllowUniversalAccessFromFileURLs(true);
         webSettings.setSupportZoom(true);
         webSettings.setDatabaseEnabled(true);
+        webSettings.setLoadsImagesAutomatically(true);
+        webSettings.setMediaPlaybackRequiresUserGesture(false);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+            CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true);
+        }
         webSettings.setUserAgentString(System.getProperty("http.agent"));
+        CookieManager.getInstance().setAcceptCookie(true);
+        wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         wv.addJavascriptInterface(new JavaScriptInterface(MainActivity.this), "Android");
     }
     @Override
@@ -633,6 +851,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        scheduleRenderRecovery(mWebView);
         if (prefs.getBoolean("firstrun", true)) {
             FirstRun();
         }
@@ -770,3 +989,11 @@ public class MainActivity extends AppCompatActivity {
         mFilePathCallback = null;
     }
 }
+
+
+
+
+
+
+
+

@@ -59,11 +59,22 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
             <intent-filter>
+                <action android:name="OPEN_ORDER_STATUS" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="cariana.com.mx" />
-                <data android:scheme="https" android:host="www.cariana.com.mx" />
+                <data android:scheme="https" android:host="cariana.mx" />
+                <data android:scheme="https" android:host="www.cariana.mx" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="cariana-3.myshopify.com" />
+                <data android:scheme="http" android:host="cariana-3.myshopify.com" />
             </intent-filter>
         </activity>
         <service
@@ -76,6 +87,24 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_stat_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="@string/default_notification_channel_id" />
+        <meta-data
+            android:name="com.carlosjuarez.cariana.PUSH_TOKEN_ENDPOINT"
+            android:value="https://centro-de-notificaciones-cariana.onrender.com/api/mobile/register-token" />
+        <meta-data
+            android:name="com.carlosjuarez.cariana.PUSH_TOKEN_API_KEY"
+            android:value="ffa0d796735a45a9bb3968265f0ee1de" />
+        <meta-data
+            android:name="com.carlosjuarez.cariana.SHOP_DOMAIN"
+            android:value="cariana-3.myshopify.com" />
         <meta-data android:name="android.webkit.WebView.EnableSafeBrowsing" android:value="true" />
     </application>
 </manifest>
+
+
+
+
+
+

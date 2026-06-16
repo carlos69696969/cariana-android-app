@@ -27,4 +27,5 @@
 -->
 <resources>
     <string name="app_name">CARIANA</string>
+    <string name="default_notification_channel_id">cariana_general_v2</string>
 </resources>
