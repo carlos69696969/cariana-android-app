@@ -356,6 +356,10 @@ public class MainActivity extends AppCompatActivity {
                     return true;
                 }
                 if (url.startsWith("https") || url.startsWith("http")) {
+                    if (shouldOpenOutsideWebView(url)) {
+                        openExternalBrowser(url);
+                        return true;
+                    }
                     if (cleanNavigationInProgress && url.equals(currentUrl)) {
                         cleanNavigationInProgress = false;
                         return false;
@@ -856,6 +860,32 @@ public class MainActivity extends AppCompatActivity {
         }
         boolean trustedStore = host.equals("cariana.mx") || host.endsWith(".myshopify.com");
         return trustedStore && path.contains("/products/");
+    }
+    private boolean shouldOpenOutsideWebView(String url) {
+        if (TextUtils.isEmpty(url)) {
+            return false;
+        }
+        Uri parsedUri = Uri.parse(url);
+        String host = parsedUri.getHost();
+        if (TextUtils.isEmpty(host)) {
+            return false;
+        }
+        host = host.toLowerCase();
+        return host.equals("accounts.google.com")
+            || host.endsWith(".accounts.google.com")
+            || host.equals("oauth.google.com")
+            || host.endsWith(".oauth.google.com")
+            || host.equals("myaccount.google.com")
+            || host.endsWith(".myaccount.google.com");
+    }
+    private void openExternalBrowser(String url) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            intent.addCategory(Intent.CATEGORY_BROWSABLE);
+            startActivity(intent);
+        } catch (ActivityNotFoundException e) {
+            Toast.makeText(MainActivity.this, "No browser app found", Toast.LENGTH_SHORT).show();
+        }
     }
     private void loadUrlCleanly(WebView webView, String url) {
         if (webView == null || TextUtils.isEmpty(url)) {
