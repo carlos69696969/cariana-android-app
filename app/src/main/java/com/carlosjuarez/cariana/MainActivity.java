@@ -135,6 +135,10 @@ public class MainActivity extends AppCompatActivity {
     static boolean homeLoaded = false;
     static String currentUrl = "";
     private boolean renderRecoveryScheduled = false;
+    private String pendingNavigationUrl = "";
+    private long pendingNavigationStartedAt = 0L;
+    private int pendingNavigationRecoveries = 0;
+    private boolean cleanNavigationInProgress = false;
     @RequiresApi(api = Build.VERSION_CODES.M)
     @SuppressLint({"SetJavaScriptEnabled", "CutPasteId"})
     @Override
@@ -319,6 +323,10 @@ public class MainActivity extends AppCompatActivity {
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
                 currentUrl = url;
+                pendingNavigationUrl = url;
+                pendingNavigationStartedAt = System.currentTimeMillis();
+                pendingNavigationRecoveries = 0;
+                scheduleNavigationRecovery(view, url);
                 if(homeLoaded) {
                     showProgress();
                 }
@@ -346,7 +354,17 @@ public class MainActivity extends AppCompatActivity {
                     handleNativeShareUrl(url);
                     return true;
                 }
-                if (url.startsWith("https") || url.startsWith("http")) return false;//open web links as usual
+                if (url.startsWith("https") || url.startsWith("http")) {
+                    if (cleanNavigationInProgress && url.equals(currentUrl)) {
+                        cleanNavigationInProgress = false;
+                        return false;
+                    }
+                    if (shouldUseCleanWebViewNavigation(url)) {
+                        loadUrlCleanly(view, url);
+                        return true;
+                    }
+                    return false;//open web links as usual
+                }
                 if (url.startsWith("mailto:")) {
                     Intent intent = new Intent(Intent.ACTION_SENDTO, Uri.parse(url));
                     try {
@@ -446,6 +464,8 @@ public class MainActivity extends AppCompatActivity {
                 enableNativeShareBridge(view);
                 enablePushIdentityBridge(view);
                 scheduleRenderRecovery(view);
+                pendingNavigationUrl = "";
+                pendingNavigationRecoveries = 0;
                 if(!homeLoaded){
                     homeLoaded = true;
                 }
@@ -744,6 +764,79 @@ public class MainActivity extends AppCompatActivity {
             }
         }, 700);
     }
+    private void scheduleNavigationRecovery(WebView webView, String navigationUrl) {
+        if (webView == null || TextUtils.isEmpty(navigationUrl)) {
+            return;
+        }
+        webView.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (mWebView == null || TextUtils.isEmpty(pendingNavigationUrl)) {
+                    return;
+                }
+                if (!navigationUrl.equals(pendingNavigationUrl)) {
+                    return;
+                }
+                int progress = mWebView.getProgress();
+                long elapsedMs = System.currentTimeMillis() - pendingNavigationStartedAt;
+                if (progress >= 100 || elapsedMs < 1200) {
+                    return;
+                }
+                mWebView.invalidate();
+                mWebView.requestLayout();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                    mWebView.evaluateJavascript(
+                        "(function(){try{document.body&&document.body.offsetHeight;window.dispatchEvent(new Event('resize'));}catch(e){}})();",
+                        null
+                    );
+                }
+                if (pendingNavigationRecoveries < 1 && elapsedMs >= 3500) {
+                    pendingNavigationRecoveries += 1;
+                    Log.w(TAG, "WebView navigation stalled. Reloading current page cleanly.");
+                    mWebView.stopLoading();
+                    loadUrlCleanly(mWebView, navigationUrl);
+                    return;
+                }
+                scheduleNavigationRecovery(mWebView, navigationUrl);
+            }
+        }, 1400);
+    }
+    private boolean shouldUseCleanWebViewNavigation(String url) {
+        if (TextUtils.isEmpty(url)) {
+            return false;
+        }
+        Uri parsedUri = Uri.parse(url);
+        String host = parsedUri.getHost();
+        String path = parsedUri.getPath();
+        if (TextUtils.isEmpty(host) || TextUtils.isEmpty(path)) {
+            return false;
+        }
+        boolean trustedStore = host.equals("cariana.mx") || host.endsWith(".myshopify.com");
+        return trustedStore && path.contains("/products/");
+    }
+    private void loadUrlCleanly(WebView webView, String url) {
+        if (webView == null || TextUtils.isEmpty(url)) {
+            return;
+        }
+        if (cleanNavigationInProgress && url.equals(currentUrl)) {
+            return;
+        }
+        cleanNavigationInProgress = true;
+        currentUrl = url;
+        pendingNavigationUrl = url;
+        pendingNavigationStartedAt = System.currentTimeMillis();
+        pendingNavigationRecoveries = 0;
+        webView.stopLoading();
+        webView.clearCache(false);
+        webView.clearHistory();
+        webView.post(new Runnable() {
+            @Override
+            public void run() {
+                webView.loadUrl(url);
+                scheduleNavigationRecovery(webView, url);
+            }
+        });
+    }
     private void getVideoCapturePermission() {
         permissionRequest.grant(permissionRequest.getResources());
     }
@@ -821,7 +914,7 @@ public class MainActivity extends AppCompatActivity {
         WebSettings webSettings = wv.getSettings();
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
-        webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        webSettings.setCacheMode(WebSettings.LOAD_NO_CACHE);
         webSettings.setSupportMultipleWindows(false);
         webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
         webSettings.setAllowFileAccess(true);
@@ -839,7 +932,6 @@ public class MainActivity extends AppCompatActivity {
             webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
             CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true);
         }
-        webSettings.setUserAgentString(System.getProperty("http.agent"));
         CookieManager.getInstance().setAcceptCookie(true);
         wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         wv.addJavascriptInterface(new JavaScriptInterface(MainActivity.this), "Android");
