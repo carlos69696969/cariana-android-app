@@ -139,6 +139,7 @@ public class MainActivity extends AppCompatActivity {
     private long pendingNavigationStartedAt = 0L;
     private int pendingNavigationRecoveries = 0;
     private boolean cleanNavigationInProgress = false;
+    private boolean whiteScreenRecoveryScheduled = false;
     @RequiresApi(api = Build.VERSION_CODES.M)
     @SuppressLint({"SetJavaScriptEnabled", "CutPasteId"})
     @Override
@@ -464,6 +465,7 @@ public class MainActivity extends AppCompatActivity {
                 enableNativeShareBridge(view);
                 enablePushIdentityBridge(view);
                 scheduleRenderRecovery(view);
+                scheduleWhiteScreenRecovery(view);
                 pendingNavigationUrl = "";
                 pendingNavigationRecoveries = 0;
                 if(!homeLoaded){
@@ -763,6 +765,47 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }, 700);
+    }
+    private void scheduleWhiteScreenRecovery(WebView webView) {
+        if (webView == null || whiteScreenRecoveryScheduled) {
+            return;
+        }
+        whiteScreenRecoveryScheduled = true;
+        webView.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                whiteScreenRecoveryScheduled = false;
+                if (mWebView == null) {
+                    return;
+                }
+                try {
+                    mWebView.onPause();
+                    mWebView.pauseTimers();
+                    mWebView.onResume();
+                    mWebView.resumeTimers();
+                } catch (Exception ignored) {
+                }
+                mWebView.setAlpha(0.99f);
+                mWebView.invalidate();
+                mWebView.requestLayout();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                    mWebView.evaluateJavascript(
+                        "(function(){try{document.documentElement.style.webkitTransform='translateZ(0)';document.body.style.webkitTransform='translateZ(0)';window.dispatchEvent(new Event('resize'));setTimeout(function(){document.documentElement.style.webkitTransform='';document.body.style.webkitTransform='';},80);}catch(e){}})();",
+                        null
+                    );
+                }
+                mWebView.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (mWebView == null) {
+                            return;
+                        }
+                        mWebView.setAlpha(1f);
+                        mWebView.invalidate();
+                    }
+                }, 120);
+            }
+        }, 250);
     }
     private void scheduleNavigationRecovery(WebView webView, String navigationUrl) {
         if (webView == null || TextUtils.isEmpty(navigationUrl)) {
