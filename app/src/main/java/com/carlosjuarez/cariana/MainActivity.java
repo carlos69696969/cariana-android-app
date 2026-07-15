@@ -38,6 +38,7 @@ import android.os.Environment;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.content.Context;
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
@@ -538,11 +539,20 @@ public class MainActivity extends AppCompatActivity {
         }
         requestNotificationPermissionIfNeeded();
         initializeFirebaseMessaging();
+        registerNativeBackHandler();
         loadInitialUrl(getIntent());
         swipeRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
             @Override
             public void onRefresh() {
                 mWebView.reload();
+            }
+        });
+    }
+    private void registerNativeBackHandler() {
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                handleAppBackNavigation();
             }
         });
     }
@@ -1126,21 +1136,25 @@ public class MainActivity extends AppCompatActivity {
         wm.getDefaultDisplay().getRealSize(size);
         return size.x + "x" + size.y;
     }
+    private void handleAppBackNavigation() {
+        if (no_internet) {
+            finish();
+            return;
+        }
+        if (handleReturnNotificationBack()) {
+            return;
+        }
+        if (mWebView != null && mWebView.canGoBack()) {
+            mWebView.goBack();
+            return;
+        }
+        finish();
+    }
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             if (keyCode == KeyEvent.KEYCODE_BACK) {
-                if (no_internet) {
-                    finish();
-                }
-                if (handleReturnNotificationBack()) {
-                    return true;
-                }
-                if (mWebView.canGoBack()) {
-                    mWebView.goBack();
-                } else {
-                    finish();
-                }
+                handleAppBackNavigation();
                 return true;
             }
         }
