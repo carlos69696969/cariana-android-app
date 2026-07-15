@@ -49,6 +49,8 @@ import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.window.OnBackInvokedCallback;
+import android.window.OnBackInvokedDispatcher;
 import android.webkit.DownloadListener;
 import android.webkit.GeolocationPermissions;
 import android.webkit.PermissionRequest;
@@ -144,6 +146,7 @@ public class MainActivity extends AppCompatActivity {
     private int pendingNavigationRecoveries = 0;
     private boolean cleanNavigationInProgress = false;
     private boolean whiteScreenRecoveryScheduled = false;
+    private OnBackInvokedCallback predictiveBackCallback = null;
     @RequiresApi(api = Build.VERSION_CODES.M)
     @SuppressLint({"SetJavaScriptEnabled", "CutPasteId"})
     @Override
@@ -555,6 +558,18 @@ public class MainActivity extends AppCompatActivity {
                 handleAppBackNavigation();
             }
         });
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            predictiveBackCallback = new OnBackInvokedCallback() {
+                @Override
+                public void onBackInvoked() {
+                    handleAppBackNavigation();
+                }
+            };
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                predictiveBackCallback
+            );
+        }
     }
     private void requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
@@ -614,6 +629,13 @@ public class MainActivity extends AppCompatActivity {
         if (TextUtils.isEmpty(targetUrl)) {
             return false;
         }
+        return isReturnNotificationUrl(targetUrl);
+    }
+
+    private boolean isReturnNotificationUrl(String targetUrl) {
+        if (TextUtils.isEmpty(targetUrl)) {
+            return false;
+        }
         Uri parsed = Uri.parse(targetUrl);
         String host = parsed.getHost();
         String path = parsed.getPath();
@@ -622,8 +644,14 @@ public class MainActivity extends AppCompatActivity {
         }
         String normalizedHost = host.toLowerCase();
         String normalizedPath = path.toLowerCase();
-        return "gestion-devoluciones-pro.onrender.com".equals(normalizedHost)
-            && normalizedPath.contains("/devoluciones");
+        if ("gestion-devoluciones-pro.onrender.com".equals(normalizedHost)
+            && normalizedPath.contains("/devoluciones")) {
+            return true;
+        }
+        return ("cariana.mx".equals(normalizedHost)
+            || "www.cariana.mx".equals(normalizedHost)
+            || "cariana-3.myshopify.com".equals(normalizedHost))
+            && normalizedPath.contains("devoluciones");
     }
 
     private void loadReturnNotificationWithBackStack(final String targetUrl) {
@@ -664,6 +692,25 @@ public class MainActivity extends AppCompatActivity {
         mWebView.stopLoading();
         mWebView.clearHistory();
         mWebView.loadUrl(returnNotificationBackUrl);
+        returnNotificationBackUrl = "";
+        return true;
+    }
+
+    private boolean handleReturnNotificationBackFallback() {
+        if (mWebView == null) {
+            return false;
+        }
+        String activeUrl = mWebView.getUrl();
+        if (TextUtils.isEmpty(activeUrl)) {
+            activeUrl = currentUrl;
+        }
+        if (!isReturnNotificationUrl(activeUrl)) {
+            return false;
+        }
+        String backUrl = buildReturnNotificationBackUrl(activeUrl);
+        mWebView.stopLoading();
+        mWebView.clearHistory();
+        mWebView.loadUrl(backUrl);
         returnNotificationBackUrl = "";
         return true;
     }
@@ -1077,6 +1124,10 @@ public class MainActivity extends AppCompatActivity {
     }
     @Override
     public void onDestroy() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && predictiveBackCallback != null) {
+            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(predictiveBackCallback);
+            predictiveBackCallback = null;
+        }
         super.onDestroy();
     }
     @Override
@@ -1146,6 +1197,9 @@ public class MainActivity extends AppCompatActivity {
         }
         if (mWebView != null && mWebView.canGoBack()) {
             mWebView.goBack();
+            return;
+        }
+        if (handleReturnNotificationBackFallback()) {
             return;
         }
         finish();
