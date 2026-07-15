@@ -119,6 +119,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String ACCOUNT_ORDERS_URL = "https://cariana.mx/account/orders";
     public static final String EXTRA_TARGET_URL = "extra_target_url";
     private boolean initialUrlLoaded = false;
+    private String returnNotificationBackUrl = "";
     SharedPreferences prefs = null;
     int width = 0, height = 0;
     boolean display_error = false;
@@ -617,6 +618,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void loadReturnNotificationWithBackStack(final String targetUrl) {
         final String backUrl = buildReturnNotificationBackUrl(targetUrl);
+        returnNotificationBackUrl = backUrl;
         mWebView.loadUrl(backUrl);
         mWebView.postDelayed(new Runnable() {
             @Override
@@ -635,6 +637,40 @@ public class MainActivity extends AppCompatActivity {
             return ACCOUNT_ORDERS_URL;
         }
         return ACCOUNT_ORDERS_URL + "?order=" + Uri.encode(orderNumber.trim());
+    }
+
+    private boolean handleReturnNotificationBack() {
+        if (TextUtils.isEmpty(returnNotificationBackUrl) || mWebView == null) {
+            return false;
+        }
+        String activeUrl = mWebView.getUrl();
+        if (TextUtils.isEmpty(activeUrl)) {
+            activeUrl = currentUrl;
+        }
+        if (isSameUrl(activeUrl, returnNotificationBackUrl)) {
+            returnNotificationBackUrl = "";
+            return false;
+        }
+        mWebView.stopLoading();
+        mWebView.clearHistory();
+        mWebView.loadUrl(returnNotificationBackUrl);
+        returnNotificationBackUrl = "";
+        return true;
+    }
+
+    private boolean isSameUrl(String first, String second) {
+        if (TextUtils.isEmpty(first) || TextUtils.isEmpty(second)) {
+            return false;
+        }
+        String normalizedFirst = first.trim();
+        String normalizedSecond = second.trim();
+        while (normalizedFirst.endsWith("/")) {
+            normalizedFirst = normalizedFirst.substring(0, normalizedFirst.length() - 1);
+        }
+        while (normalizedSecond.endsWith("/")) {
+            normalizedSecond = normalizedSecond.substring(0, normalizedSecond.length() - 1);
+        }
+        return normalizedFirst.equalsIgnoreCase(normalizedSecond);
     }
 
     private String resolveIntentDeepLink(Intent intent) {
@@ -1096,6 +1132,9 @@ public class MainActivity extends AppCompatActivity {
             if (keyCode == KeyEvent.KEYCODE_BACK) {
                 if (no_internet) {
                     finish();
+                }
+                if (handleReturnNotificationBack()) {
+                    return true;
                 }
                 if (mWebView.canGoBack()) {
                     mWebView.goBack();
