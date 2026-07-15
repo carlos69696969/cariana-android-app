@@ -116,7 +116,9 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private static final String DEFAULT_HOME_URL = "https://cariana.mx/";
     private static final String BACKUP_HOME_URL = "https://cariana-3.myshopify.com/";
+    private static final String ACCOUNT_ORDERS_URL = "https://cariana.mx/account/orders";
     public static final String EXTRA_TARGET_URL = "extra_target_url";
+    private boolean initialUrlLoaded = false;
     SharedPreferences prefs = null;
     int width = 0, height = 0;
     boolean display_error = false;
@@ -588,7 +590,51 @@ public class MainActivity extends AppCompatActivity {
         if (TextUtils.isEmpty(targetUrl)) {
             targetUrl = DEFAULT_HOME_URL;
         }
+        if (!initialUrlLoaded && shouldSeedReturnNotificationBackStack(targetUrl)) {
+            initialUrlLoaded = true;
+            loadReturnNotificationWithBackStack(targetUrl);
+            return;
+        }
+        initialUrlLoaded = true;
         mWebView.loadUrl(targetUrl);
+    }
+
+    private boolean shouldSeedReturnNotificationBackStack(String targetUrl) {
+        if (TextUtils.isEmpty(targetUrl)) {
+            return false;
+        }
+        Uri parsed = Uri.parse(targetUrl);
+        String host = parsed.getHost();
+        String path = parsed.getPath();
+        if (TextUtils.isEmpty(host) || TextUtils.isEmpty(path)) {
+            return false;
+        }
+        String normalizedHost = host.toLowerCase();
+        String normalizedPath = path.toLowerCase();
+        return "gestion-devoluciones-pro.onrender.com".equals(normalizedHost)
+            && normalizedPath.contains("/devoluciones");
+    }
+
+    private void loadReturnNotificationWithBackStack(final String targetUrl) {
+        final String backUrl = buildReturnNotificationBackUrl(targetUrl);
+        mWebView.loadUrl(backUrl);
+        mWebView.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (mWebView != null) {
+                    mWebView.loadUrl(targetUrl);
+                }
+            }
+        }, 700);
+    }
+
+    private String buildReturnNotificationBackUrl(String targetUrl) {
+        Uri parsed = Uri.parse(targetUrl);
+        String orderNumber = parsed.getQueryParameter("order");
+        if (TextUtils.isEmpty(orderNumber)) {
+            return ACCOUNT_ORDERS_URL;
+        }
+        return ACCOUNT_ORDERS_URL + "?order=" + Uri.encode(orderNumber.trim());
     }
 
     private String resolveIntentDeepLink(Intent intent) {
