@@ -120,6 +120,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String DEFAULT_HOME_URL = "https://cariana.mx/";
     private static final String BACKUP_HOME_URL = "https://cariana-3.myshopify.com/";
     private static final String ACCOUNT_ORDERS_URL = "https://cariana.mx/account/orders";
+    private static final String ERROR_PAGE_URL = "file:///android_asset/htmlapp/helpers/error.html";
     public static final String EXTRA_TARGET_URL = "extra_target_url";
     private boolean initialUrlLoaded = false;
     private String returnNotificationBackUrl = "";
@@ -147,6 +148,9 @@ public class MainActivity extends AppCompatActivity {
     private boolean cleanNavigationInProgress = false;
     private boolean whiteScreenRecoveryScheduled = false;
     private OnBackInvokedCallback predictiveBackCallback = null;
+    private boolean errorRecoveryScheduled = false;
+    private String lastRecoverableUrl = DEFAULT_HOME_URL;
+    private String pendingErrorRecoveryUrl = DEFAULT_HOME_URL;
     @RequiresApi(api = Build.VERSION_CODES.M)
     @SuppressLint({"SetJavaScriptEnabled", "CutPasteId"})
     @Override
@@ -331,10 +335,13 @@ public class MainActivity extends AppCompatActivity {
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
                 currentUrl = url;
-                pendingNavigationUrl = url;
-                pendingNavigationStartedAt = System.currentTimeMillis();
-                pendingNavigationRecoveries = 0;
-                scheduleNavigationRecovery(view, url);
+                if (isRecoverableWebUrl(url)) {
+                    lastRecoverableUrl = url;
+                    pendingNavigationUrl = url;
+                    pendingNavigationStartedAt = System.currentTimeMillis();
+                    pendingNavigationRecoveries = 0;
+                    scheduleNavigationRecovery(view, url);
+                }
                 if(homeLoaded) {
                     showProgress();
                 }
@@ -473,6 +480,17 @@ public class MainActivity extends AppCompatActivity {
                 enablePushIdentityBridge(view);
                 scheduleRenderRecovery(view);
                 scheduleWhiteScreenRecovery(view);
+                if (isErrorPageUrl(url)) {
+                    pendingNavigationUrl = "";
+                    pendingNavigationRecoveries = 0;
+                    scheduleErrorRecovery(view);
+                    return;
+                }
+                if (isRecoverableWebUrl(url)) {
+                    lastRecoverableUrl = url;
+                    pendingErrorRecoveryUrl = url;
+                    no_internet = false;
+                }
                 pendingNavigationUrl = "";
                 pendingNavigationRecoveries = 0;
                 if(!homeLoaded){
@@ -492,20 +510,29 @@ public class MainActivity extends AppCompatActivity {
             }
             @Override
             public void onReceivedError(@NonNull WebView view, @NonNull WebResourceRequest request, @NonNull WebResourceError error) {
-                if (!display_error) {
-                    mWebView.loadUrl("file:///android_asset/htmlapp/helpers/error.html");
-                    display_error = true;
+                if (request != null && !request.isForMainFrame()) {
+                    return;
                 }
+                Uri failingUri = request != null ? request.getUrl() : null;
+                String failingUrl = failingUri != null ? failingUri.toString() : "";
+                if (isRecoverableWebUrl(failingUrl)) {
+                    pendingErrorRecoveryUrl = failingUrl;
+                } else if (isRecoverableWebUrl(lastRecoverableUrl)) {
+                    pendingErrorRecoveryUrl = lastRecoverableUrl;
+                } else {
+                    pendingErrorRecoveryUrl = DEFAULT_HOME_URL;
+                }
+                no_internet = !checkInternetConnection(MainActivity.this);
+                mWebView.loadUrl(ERROR_PAGE_URL);
+                display_error = true;
+                scheduleErrorRecovery(view);
                 int errorCode = error.getErrorCode();
                 switch (errorCode) {
                     case ERROR_CONNECT:
-                        view.loadUrl("https://www.webintoapp.com/landing/ERROR_CONNECT");
                         break;
                     case ERROR_HOST_LOOKUP:
-                        view.loadUrl("https://www.webintoapp.com/landing/ERROR_HOST_LOOKUP");
                         break;
                     case ERROR_TIMEOUT:
-                        view.loadUrl("https://www.webintoapp.com/landing/ERROR_TIMEOUT");
                         break;
                 }
             }
@@ -521,6 +548,7 @@ public class MainActivity extends AppCompatActivity {
                     String failingUrl = failingUri != null ? failingUri.toString() : "";
                     if (!failingUrl.startsWith(BACKUP_HOME_URL)) {
                         Log.w(TAG, "Servidor principal con error " + statusCode + ". Cargando respaldo.");
+                        pendingErrorRecoveryUrl = failingUrl;
                         view.loadUrl(BACKUP_HOME_URL);
                     }
                 }
@@ -535,14 +563,16 @@ public class MainActivity extends AppCompatActivity {
             }            
         });
         SetWebView(mWebView);
+        registerNativeBackHandler();
         if (!checkInternetConnection(MainActivity.this)) {
-            mWebView.loadUrl("file:///android_asset/htmlapp/helpers/error.html");
+            pendingErrorRecoveryUrl = DEFAULT_HOME_URL;
+            mWebView.loadUrl(ERROR_PAGE_URL);
             no_internet = true;
+            scheduleErrorRecovery(mWebView);
             return;
         }
         requestNotificationPermissionIfNeeded();
         initializeFirebaseMessaging();
-        registerNativeBackHandler();
         loadInitialUrl(getIntent());
         swipeRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
             @Override
@@ -983,6 +1013,65 @@ public class MainActivity extends AppCompatActivity {
             }
         }, 1400);
     }
+    private void scheduleErrorRecovery(WebView webView) {
+        if (webView == null || errorRecoveryScheduled) {
+            return;
+        }
+        errorRecoveryScheduled = true;
+        webView.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                errorRecoveryScheduled = false;
+                if (mWebView == null || isFinishing()) {
+                    return;
+                }
+                String activeUrl = mWebView.getUrl();
+                boolean showingErrorPage = isErrorPageUrl(activeUrl) || isErrorPageUrl(currentUrl);
+                if (!showingErrorPage && !no_internet) {
+                    return;
+                }
+                if (!checkInternetConnection(MainActivity.this)) {
+                    no_internet = true;
+                    scheduleErrorRecovery(mWebView);
+                    return;
+                }
+                no_internet = false;
+                String recoveryUrl = pendingErrorRecoveryUrl;
+                if (!isRecoverableWebUrl(recoveryUrl)) {
+                    recoveryUrl = lastRecoverableUrl;
+                }
+                if (!isRecoverableWebUrl(recoveryUrl)) {
+                    recoveryUrl = DEFAULT_HOME_URL;
+                }
+                Log.w(TAG, "Recovering WebView from error page with " + recoveryUrl);
+                mWebView.stopLoading();
+                loadUrlCleanly(mWebView, recoveryUrl);
+            }
+        }, 3500);
+    }
+    private boolean isErrorPageUrl(String url) {
+        return !TextUtils.isEmpty(url) && url.startsWith(ERROR_PAGE_URL);
+    }
+    private boolean isRecoverableWebUrl(String url) {
+        if (TextUtils.isEmpty(url)) {
+            return false;
+        }
+        Uri parsed = Uri.parse(url);
+        String scheme = parsed.getScheme();
+        String host = parsed.getHost();
+        if (TextUtils.isEmpty(scheme) || TextUtils.isEmpty(host)) {
+            return false;
+        }
+        if (!"https".equalsIgnoreCase(scheme) && !"http".equalsIgnoreCase(scheme)) {
+            return false;
+        }
+        String normalizedHost = host.toLowerCase();
+        return "cariana.mx".equals(normalizedHost)
+            || "www.cariana.mx".equals(normalizedHost)
+            || "cariana-3.myshopify.com".equals(normalizedHost)
+            || normalizedHost.endsWith(".myshopify.com")
+            || "gestion-devoluciones-pro.onrender.com".equals(normalizedHost);
+    }
     private boolean shouldUseCleanWebViewNavigation(String url) {
         if (TextUtils.isEmpty(url)) {
             return false;
@@ -1134,6 +1223,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         scheduleRenderRecovery(mWebView);
+        if (mWebView != null && (no_internet || isErrorPageUrl(mWebView.getUrl()) || isErrorPageUrl(currentUrl))) {
+            scheduleErrorRecovery(mWebView);
+        }
         if (prefs.getBoolean("firstrun", true)) {
             FirstRun();
         }
@@ -1189,6 +1281,10 @@ public class MainActivity extends AppCompatActivity {
     }
     private void handleAppBackNavigation() {
         if (no_internet) {
+            if (mWebView != null && checkInternetConnection(this)) {
+                scheduleErrorRecovery(mWebView);
+                return;
+            }
             finish();
             return;
         }
