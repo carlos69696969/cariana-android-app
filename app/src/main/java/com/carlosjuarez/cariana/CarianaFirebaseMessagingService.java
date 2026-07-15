@@ -3,6 +3,7 @@ package com.carlosjuarez.cariana;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.media.AudioAttributes;
@@ -97,9 +98,7 @@ public class CarianaFirebaseMessagingService extends FirebaseMessagingService {
             return;
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            createNotificationChannels(manager);
-        }
+        ensureNotificationChannels(this);
 
         String channelId = channelForType(type);
         Uri soundUri = notificationSoundUri();
@@ -199,8 +198,15 @@ public class CarianaFirebaseMessagingService extends FirebaseMessagingService {
         return "";
     }
 
-    private void createNotificationChannels(NotificationManager manager) {
-        Uri soundUri = notificationSoundUri();
+    public static void ensureNotificationChannels(Context context) {
+        if (context == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return;
+        }
+        NotificationManager manager = (NotificationManager) context.getSystemService(NOTIFICATION_SERVICE);
+        if (manager == null) {
+            return;
+        }
+        Uri soundUri = notificationSoundUri(context);
         AudioAttributes audioAttributes = new AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_NOTIFICATION)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -253,8 +259,12 @@ public class CarianaFirebaseMessagingService extends FirebaseMessagingService {
         manager.createNotificationChannel(promos);
     }
 
+    private static Uri notificationSoundUri(Context context) {
+        return Uri.parse("android.resource://" + context.getPackageName() + "/" + R.raw.cariana_notification_sound);
+    }
+
     private Uri notificationSoundUri() {
-        return Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.cariana_notification_sound);
+        return notificationSoundUri(this);
     }
 
     private String normalizeType(String rawType) {

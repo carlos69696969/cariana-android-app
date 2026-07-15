@@ -572,6 +572,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         requestNotificationPermissionIfNeeded();
+        CarianaFirebaseMessagingService.ensureNotificationChannels(this);
         initializeFirebaseMessaging();
         loadInitialUrl(getIntent());
         swipeRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
