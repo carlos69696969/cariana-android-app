@@ -274,16 +274,18 @@ public class JavaScriptInterface {
             intent.setDataAndType(apkURI, MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext));
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             PendingIntent pendingIntent = PendingIntent.getActivity(context,1, intent, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-            String CHANNEL_ID = "MYCHANNEL";
+            String CHANNEL_ID = "cariana_local_v3";
             final NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                NotificationChannel notificationChannel= new NotificationChannel(CHANNEL_ID,"name", NotificationManager.IMPORTANCE_LOW);
+                NotificationChannel notificationChannel= new NotificationChannel(CHANNEL_ID,"Cariana", NotificationManager.IMPORTANCE_HIGH);
+                notificationChannel.enableVibration(true);
                 Notification notification = new Notification.Builder(context,CHANNEL_ID)
                     .setContentTitle("Download Complete")
                     .setContentText(filename)
                     .setContentIntent(pendingIntent)
                     .setChannelId(CHANNEL_ID)
                     .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                    .setPriority(Notification.PRIORITY_HIGH)
                     .build();
                 if (notificationManager != null) {
                     notificationManager.createNotificationChannel(notificationChannel);
@@ -295,7 +297,8 @@ public class JavaScriptInterface {
                     .setWhen(System.currentTimeMillis())
                     .setSmallIcon(android.R.drawable.sym_action_chat)
                     .setContentTitle("Download Complete")
-                    .setContentText(filename);
+                    .setContentText(filename)
+                    .setPriority(NotificationCompat.PRIORITY_HIGH);
                 if (notificationManager != null) {
                     notificationManager.notify(notificationId, b.build());
                     Handler h = new Handler();

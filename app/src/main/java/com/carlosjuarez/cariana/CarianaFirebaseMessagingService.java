@@ -20,11 +20,11 @@ import java.util.Map;
 
 public class CarianaFirebaseMessagingService extends FirebaseMessagingService {
     private static final String TAG = "CarianaFCM";
-    private static final String CHANNEL_GENERAL = "cariana_general_v2";
-    private static final String CHANNEL_ORDERS = "cariana_orders_v2";
-    private static final String CHANNEL_SHIPPING = "cariana_shipping_v2";
-    private static final String CHANNEL_RETURNS = "cariana_returns_v2";
-    private static final String CHANNEL_PROMOS = "cariana_promos_v2";
+    private static final String CHANNEL_GENERAL = "cariana_general_v3";
+    private static final String CHANNEL_ORDERS = "cariana_orders_v3";
+    private static final String CHANNEL_SHIPPING = "cariana_shipping_v3";
+    private static final String CHANNEL_RETURNS = "cariana_returns_v3";
+    private static final String CHANNEL_PROMOS = "cariana_promos_v3";
     private static final String PREFS_PUSH_STORE = "cariana_push_notifications";
     private static final String PREFS_KEY_URL_PREFIX = "push_url_";
 
@@ -110,7 +110,10 @@ public class CarianaFirebaseMessagingService extends FirebaseMessagingService {
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setSound(soundUri)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+            .setVibrate(new long[] { 0, 250, 180, 250 })
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setPriority(NotificationCompat.PRIORITY_HIGH);
 
         int notificationId = (int) (System.currentTimeMillis() & 0x7fffffff);
         manager.notify(notificationId, builder.build());
@@ -215,10 +218,13 @@ public class CarianaFirebaseMessagingService extends FirebaseMessagingService {
         NotificationChannel general = new NotificationChannel(
             CHANNEL_GENERAL,
             "General",
-            NotificationManager.IMPORTANCE_DEFAULT
+            NotificationManager.IMPORTANCE_HIGH
         );
         general.setDescription("Notificaciones generales");
         general.setSound(soundUri, audioAttributes);
+        general.enableVibration(true);
+        general.setVibrationPattern(new long[] { 0, 250, 180, 250 });
+        general.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
 
         NotificationChannel orders = new NotificationChannel(
             CHANNEL_ORDERS,
@@ -227,6 +233,9 @@ public class CarianaFirebaseMessagingService extends FirebaseMessagingService {
         );
         orders.setDescription("Actualizaciones de pedido");
         orders.setSound(soundUri, audioAttributes);
+        orders.enableVibration(true);
+        orders.setVibrationPattern(new long[] { 0, 250, 180, 250 });
+        orders.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
 
         NotificationChannel shipping = new NotificationChannel(
             CHANNEL_SHIPPING,
@@ -235,6 +244,9 @@ public class CarianaFirebaseMessagingService extends FirebaseMessagingService {
         );
         shipping.setDescription("Seguimiento de envio");
         shipping.setSound(soundUri, audioAttributes);
+        shipping.enableVibration(true);
+        shipping.setVibrationPattern(new long[] { 0, 250, 180, 250 });
+        shipping.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
 
         NotificationChannel returns = new NotificationChannel(
             CHANNEL_RETURNS,
@@ -243,14 +255,20 @@ public class CarianaFirebaseMessagingService extends FirebaseMessagingService {
         );
         returns.setDescription("Estado de devoluciones y reembolsos");
         returns.setSound(soundUri, audioAttributes);
+        returns.enableVibration(true);
+        returns.setVibrationPattern(new long[] { 0, 250, 180, 250 });
+        returns.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
 
         NotificationChannel promos = new NotificationChannel(
             CHANNEL_PROMOS,
             "Promociones",
-            NotificationManager.IMPORTANCE_DEFAULT
+            NotificationManager.IMPORTANCE_HIGH
         );
         promos.setDescription("Promociones y novedades");
         promos.setSound(soundUri, audioAttributes);
+        promos.enableVibration(true);
+        promos.setVibrationPattern(new long[] { 0, 250, 180, 250 });
+        promos.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
 
         manager.createNotificationChannel(general);
         manager.createNotificationChannel(orders);
