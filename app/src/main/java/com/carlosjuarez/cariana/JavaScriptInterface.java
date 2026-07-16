@@ -113,17 +113,60 @@ public class JavaScriptInterface {
     }
     @JavascriptInterface
     public void shareUrl(String url, String text) {
+        String cleanUrl = cleanProductShareUrl(url);
+        String cleanText = formatProductShareText(text, cleanUrl);
         StringBuilder content = new StringBuilder();
-        if (!TextUtils.isEmpty(text)) {
-            content.append(text.trim());
+        if (!TextUtils.isEmpty(cleanText)) {
+            content.append(cleanText.trim());
         }
-        if (!TextUtils.isEmpty(url)) {
+        if (!TextUtils.isEmpty(cleanUrl)) {
             if (content.length() > 0) {
                 content.append("\n");
             }
-            content.append(url.trim());
+            content.append(cleanUrl.trim());
         }
         shareContent("Compartir", content.toString());
+    }
+    private String cleanProductShareUrl(String url) {
+        if (TextUtils.isEmpty(url)) {
+            return url;
+        }
+        Uri parsed = Uri.parse(url);
+        String host = parsed.getHost();
+        String path = parsed.getPath();
+        if (TextUtils.isEmpty(host) || TextUtils.isEmpty(path) || !path.contains("/products/")) {
+            return url;
+        }
+        String normalizedHost = host.toLowerCase();
+        if (!"cariana.mx".equals(normalizedHost)
+            && !"www.cariana.mx".equals(normalizedHost)
+            && !"cariana-3.myshopify.com".equals(normalizedHost)
+            && !normalizedHost.endsWith(".myshopify.com")) {
+            return url;
+        }
+        return parsed.buildUpon()
+            .scheme("https")
+            .encodedAuthority("www.cariana.mx")
+            .encodedPath(path)
+            .clearQuery()
+            .fragment(null)
+            .build()
+            .toString();
+    }
+    private String formatProductShareText(String text, String url) {
+        if (TextUtils.isEmpty(url)) {
+            return text;
+        }
+        Uri parsed = Uri.parse(url);
+        String path = parsed.getPath();
+        if (TextUtils.isEmpty(path) || !path.contains("/products/")) {
+            return text;
+        }
+        String normalizedText = TextUtils.isEmpty(text) ? "" : text.trim();
+        if (normalizedText.toLowerCase().contains("mira este producto de cariana")) {
+            return normalizedText;
+        }
+        return "Mira este producto de CARIANA \uD83D\uDD25 Creo que te va a gustar:";
     }
     private void shareContent(String subject, String content) {
         if (TextUtils.isEmpty(content)) {

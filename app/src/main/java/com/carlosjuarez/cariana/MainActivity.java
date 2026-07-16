@@ -816,6 +816,8 @@ public class MainActivity extends AppCompatActivity {
         Uri parsed = Uri.parse(url);
         String text = parsed.getQueryParameter("text");
         String link = parsed.getQueryParameter("url");
+        link = cleanProductShareUrl(link);
+        text = formatProductShareText(text, link);
         StringBuilder payload = new StringBuilder();
         if (!TextUtils.isEmpty(text)) {
             payload.append(text.trim());
@@ -834,6 +836,42 @@ public class MainActivity extends AppCompatActivity {
         shareIntent.putExtra(Intent.EXTRA_TEXT, payload.toString());
         startActivity(Intent.createChooser(shareIntent, "Compartir con"));
     }
+    private String cleanProductShareUrl(String url) {
+        if (TextUtils.isEmpty(url)) {
+            return url;
+        }
+        Uri parsed = Uri.parse(url);
+        String host = parsed.getHost();
+        String path = parsed.getPath();
+        if (TextUtils.isEmpty(host) || TextUtils.isEmpty(path) || !path.contains("/products/")) {
+            return url;
+        }
+        String normalizedHost = host.toLowerCase();
+        if (!"cariana.mx".equals(normalizedHost)
+            && !"www.cariana.mx".equals(normalizedHost)
+            && !"cariana-3.myshopify.com".equals(normalizedHost)
+            && !normalizedHost.endsWith(".myshopify.com")) {
+            return url;
+        }
+        return parsed.buildUpon()
+            .scheme("https")
+            .encodedAuthority("www.cariana.mx")
+            .encodedPath(path)
+            .clearQuery()
+            .fragment(null)
+            .build()
+            .toString();
+    }
+    private String formatProductShareText(String text, String url) {
+        if (TextUtils.isEmpty(url) || !shouldUseCleanWebViewNavigation(url)) {
+            return text;
+        }
+        String normalizedText = TextUtils.isEmpty(text) ? "" : text.trim();
+        if (normalizedText.toLowerCase().contains("mira este producto de cariana")) {
+            return normalizedText;
+        }
+        return "Mira este producto de CARIANA \uD83D\uDD25 Creo que te va a gustar:";
+    }
     private void enableNativeShareBridge(WebView webView) {
         if (webView == null) {
             return;
@@ -841,9 +879,14 @@ public class MainActivity extends AppCompatActivity {
         String shareHookScript =
             "(function(){"
                 + "if(window.__carianaShareHooked){return;}window.__carianaShareHooked=true;"
+                + "var isProductUrl=function(u){try{var x=new URL(u,window.location.href);return /(^|\\.)cariana\\.mx$/i.test(x.hostname)||/\\.myshopify\\.com$/i.test(x.hostname)?x.pathname.indexOf('/products/')!==-1:false;}catch(e){return false;}};"
+                + "var cleanProductUrl=function(u){try{var x=new URL(u||window.location.href,window.location.href);if(!isProductUrl(x.href)){return x.href;}return 'https://www.cariana.mx'+x.pathname;}catch(e){return u||window.location.href;}};"
+                + "var productShareText=function(t,u){if(!isProductUrl(u)){return t||document.title;}return 'Mira este producto de CARIANA \\uD83D\\uDD25 Creo que te va a gustar:';};"
                 + "var nativeShare=function(txt,url){"
                 + "try{"
-                + "if(window.Android&&Android.shareUrl){Android.shareUrl(url||window.location.href,txt||document.title);return true;}"
+                + "var u=cleanProductUrl(url||window.location.href);"
+                + "var t=productShareText(txt||document.title,u);"
+                + "if(window.Android&&Android.shareUrl){Android.shareUrl(u,t);return true;}"
                 + "}catch(e){}"
                 + "return false;"
                 + "};"
@@ -862,7 +905,9 @@ public class MainActivity extends AppCompatActivity {
                 + "var text=((el.innerText||el.textContent||'')+' '+(el.getAttribute('aria-label')||'')+' '+(el.getAttribute('title')||'')).toLowerCase();"
                 + "if(text.indexOf('compartir')===-1&&text.indexOf('share')===-1){return;}"
                 + "ev.preventDefault();ev.stopPropagation();"
-                + "nativeShare(document.title,window.location.href);"
+                + "var title=(document.querySelector('meta[property=\"og:title\"]')||{}).content||document.title;"
+                + "var link=(document.querySelector('link[rel=\"canonical\"]')||{}).href||(document.querySelector('meta[property=\"og:url\"]')||{}).content||window.location.href;"
+                + "nativeShare(title,link);"
                 + "},true);"
             + "})();";
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
