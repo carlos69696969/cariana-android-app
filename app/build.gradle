@@ -31,8 +31,8 @@ android {
         applicationId "com.carlosjuarez.cariana"
         targetSdk 36
         minSdk 24
-        versionCode 20101
-        versionName "2.1.1"
+        versionCode 20102
+        versionName "2.1.2"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
     compileOptions {
