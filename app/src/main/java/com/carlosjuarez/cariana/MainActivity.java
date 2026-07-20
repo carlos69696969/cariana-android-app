@@ -681,6 +681,7 @@ public class MainActivity extends AppCompatActivity {
         }
         return ("cariana.mx".equals(normalizedHost)
             || "www.cariana.mx".equals(normalizedHost)
+            || "app.cariana.mx".equals(normalizedHost)
             || "cariana-3.myshopify.com".equals(normalizedHost))
             && normalizedPath.contains("devoluciones");
     }
@@ -808,6 +809,7 @@ public class MainActivity extends AppCompatActivity {
         String normalizedHost = host.toLowerCase();
         return "cariana.mx".equals(normalizedHost)
             || "www.cariana.mx".equals(normalizedHost)
+            || "app.cariana.mx".equals(normalizedHost)
             || normalizedHost.endsWith(".myshopify.com")
             || "gestion-devoluciones-pro.onrender.com".equals(normalizedHost)
             || "centro-de-notificaciones-cariana.onrender.com".equals(normalizedHost);
@@ -849,13 +851,14 @@ public class MainActivity extends AppCompatActivity {
         String normalizedHost = host.toLowerCase();
         if (!"cariana.mx".equals(normalizedHost)
             && !"www.cariana.mx".equals(normalizedHost)
+            && !"app.cariana.mx".equals(normalizedHost)
             && !"cariana-3.myshopify.com".equals(normalizedHost)
             && !normalizedHost.endsWith(".myshopify.com")) {
             return url;
         }
         return parsed.buildUpon()
             .scheme("https")
-            .encodedAuthority("www.cariana.mx")
+            .encodedAuthority("app.cariana.mx")
             .encodedPath(path)
             .clearQuery()
             .fragment(null)
@@ -880,7 +883,7 @@ public class MainActivity extends AppCompatActivity {
             "(function(){"
                 + "if(window.__carianaShareHooked){return;}window.__carianaShareHooked=true;"
                 + "var isProductUrl=function(u){try{var x=new URL(u,window.location.href);return /(^|\\.)cariana\\.mx$/i.test(x.hostname)||/\\.myshopify\\.com$/i.test(x.hostname)?x.pathname.indexOf('/products/')!==-1:false;}catch(e){return false;}};"
-                + "var cleanProductUrl=function(u){try{var x=new URL(u||window.location.href,window.location.href);if(!isProductUrl(x.href)){return x.href;}return 'https://www.cariana.mx'+x.pathname;}catch(e){return u||window.location.href;}};"
+                + "var cleanProductUrl=function(u){try{var x=new URL(u||window.location.href,window.location.href);if(!isProductUrl(x.href)){return x.href;}return 'https://app.cariana.mx'+x.pathname;}catch(e){return u||window.location.href;}};"
                 + "var productShareText=function(t,u){if(!isProductUrl(u)){return t||document.title;}return 'Mira este producto de CARIANA \\uD83D\\uDD25 Creo que te va a gustar:';};"
                 + "var nativeShare=function(txt,url){"
                 + "try{"
@@ -1114,6 +1117,7 @@ public class MainActivity extends AppCompatActivity {
         String normalizedHost = host.toLowerCase();
         return "cariana.mx".equals(normalizedHost)
             || "www.cariana.mx".equals(normalizedHost)
+            || "app.cariana.mx".equals(normalizedHost)
             || "cariana-3.myshopify.com".equals(normalizedHost)
             || normalizedHost.endsWith(".myshopify.com")
             || "gestion-devoluciones-pro.onrender.com".equals(normalizedHost);
@@ -1128,7 +1132,10 @@ public class MainActivity extends AppCompatActivity {
         if (TextUtils.isEmpty(host) || TextUtils.isEmpty(path)) {
             return false;
         }
-        boolean trustedStore = host.equals("cariana.mx") || host.endsWith(".myshopify.com");
+        boolean trustedStore = host.equals("cariana.mx")
+            || host.equals("www.cariana.mx")
+            || host.equals("app.cariana.mx")
+            || host.endsWith(".myshopify.com");
         return trustedStore && path.contains("/products/");
     }
     private void loadUrlCleanly(WebView webView, String url) {

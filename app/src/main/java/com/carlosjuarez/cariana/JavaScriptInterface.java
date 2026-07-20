@@ -333,13 +333,14 @@ public class JavaScriptInterface {
         String normalizedHost = host.toLowerCase();
         if (!"cariana.mx".equals(normalizedHost)
             && !"www.cariana.mx".equals(normalizedHost)
+            && !"app.cariana.mx".equals(normalizedHost)
             && !"cariana-3.myshopify.com".equals(normalizedHost)
             && !normalizedHost.endsWith(".myshopify.com")) {
             return url;
         }
         return parsed.buildUpon()
             .scheme("https")
-            .encodedAuthority("www.cariana.mx")
+            .encodedAuthority("app.cariana.mx")
             .encodedPath(path)
             .clearQuery()
             .fragment(null)

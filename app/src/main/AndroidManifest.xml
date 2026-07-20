@@ -72,6 +72,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="cariana.mx" />
                 <data android:scheme="https" android:host="www.cariana.mx" />
+                <data android:scheme="https" android:host="app.cariana.mx" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
